@@ -6,6 +6,7 @@ const fs = require('pn/fs');
 const svg2png = require('svg2png');
 const tmp = require('tmp');
 const cp = require('copy-paste');
+const zlib = require('zlib');
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -81,6 +82,37 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(open);
 
+    let openz = vscode.commands.registerCommand('svgviewer.opensvgz', () => {
+        vscode.window.showInputBox({
+            prompt: `Set svgz file path.`,
+            validateInput: checkSVGZPath
+        }).then(path => {
+            if (path) {
+                fs.readFile(path).then(file => {
+                    zlib.gunzip(file, function (err, data) {
+                        if (err) {
+                            vscode.window.showErrorMessage('Gunzip: ' + err.toString());
+                            return;
+                        }
+                        let svg = (new Buffer(data, 'utf8')).toString()
+                        vscode.commands.executeCommand('workbench.action.files.newUntitledFile');
+                        let editor = vscode.window.activeTextEditor;
+                        while (!editor) {
+                            console.log(Date.now());
+                        }
+                        //setText(svg).then(console.log, console.error);
+                        editor.edit(eb => { eb.insert(new vscode.Position(0, 0), svg); });
+                        // vscode.TextEdit.insert(new vscode.Position(0, 0), svg);
+                        //editor.document.languageId = 'xml';
+
+                    });
+                });
+            }
+        })
+    });
+
+    context.subscriptions.push(openz);
+
     let saveas = vscode.commands.registerTextEditorCommand('svgviewer.saveas', (te, t) => {
         if (checkNoSvg(te)) return;
         let editor = vscode.window.activeTextEditor;
@@ -153,6 +185,15 @@ function exportPng(tmpobj: any, text: string, pngpath: string, w?: number, h?: n
                 vscode.window.showInformationMessage('export done. ' + pngpath);
             })
             .catch(e => vscode.window.showErrorMessage(e.message)));
+}
+function checkSVGZPath(value: string): string {
+    try {
+        fs.accessSync(value, fs.F_OK);
+        if (value.toLowerCase().endsWith('.svgz')) return null;
+    } catch (e) {
+
+    }
+    return 'Please set a correct svgz file path.';
 }
 
 export function deactivate() {
